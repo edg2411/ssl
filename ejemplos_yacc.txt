@@ -1,0 +1,516 @@
+/* ============================================================ */
+/* ejemplo lex-yacc1 */
+/* ============================================================ */
+/* -----------------------  lex.l ------------------------- */
+/* definiciones regulares */
+
+delimitadores   [ \t\n]
+nulos           {delimitadores}+
+letra           [A-Za-z]
+digito          [0-9]
+
+%%
+{letra}({letra}|{digito})*      {/*printf("id ");*/return(ID);}
+{nulos}                         ;
+","                             {/*printf(",");*/return(',');}
+";"                             {/*printf(";");*/return(';');}
+.                               {/*el reconocedor de cualquier caracter
+                                debe ser el ultimo en la lista
+                                atencion porque este tipo de reconocedores
+                                puede resultar un tanto confuso*/
+                                printf("error lexico \n");}
+
+/* ------------------------- yacc.y -------------------------*/
+
+ /* compilar con "cc y.tab.c -ly -ll */
+%{   
+%}
+  /* declaracion de los tokens de la gramatica */
+%token ID
+
+%%
+
+declaracion   :lista';'         {printf("total identificadores = %3d \n", $1);}
+        ;
+
+lista   :lista ',' ID           {$$ = $1 + 1; 
+                                printf("ID  %s  %2d \n", yytext, $$);}
+        |ID                     {$$ = 1; 
+                                printf("ID  %s  %2d \n", yytext, $$);}
+        ;
+
+%%
+#include "lex.yy.c"
+
+/* ============================================================ */
+/*  ejemplo lex-yacc2  */
+/* ============================================================ */
+/* -----------------------  lex.l ------------------------- */
+
+%{
+/* este codigo C se incorpora a las declaraciones de lex.yy.c */
+#include <stdlib.h>
+%}
+
+delimitadores   [ \n\t]
+nulos           {delimitadores}+
+letra           [a-zA-Z]
+numero          [0-9]
+identificador   {letra}({letra}|{numero})*
+entero          {numero}+|-{numero}+
+
+
+%%
+{identificador}         {/*printf("id ");*/
+                        return(ID);}
+"-"                     {/*printf(" menos ");*/
+                        return(OPM);}
+{entero}                {yylval=atoi(yytext);
+                        return(NUM);
+                        /*printf("%s ", yytext);*/}
+{nulos}                 ;
+.                       {printf("otro caracter \n");}
+
+/* ------------------------- yacc.y -------------------------*/
+
+%{
+
+%}
+
+%token  ID
+%token  OPM
+%token  NUM
+
+%%
+
+expression
+        : expression OPM term           {$$ = $1 - $3; 
+                                        printf("%d \n", $$);}
+        | term                          {$$ = $1; 
+                                        printf("%d \n", $$);}
+        ;
+
+term
+        : ID                            {$$ = 100;}
+        | NUM                           {$$ = yylval;}
+        ;
+
+%%
+# include "lex.yy.c"
+
+/* ========================================================== */
+/* ejemplo lex-yacc3  primera aproximacion /* 
+/* ========================================================== */
+
+/* -----------------------  lex.l ------------------------- */
+
+
+%{
+/* este codigo C se incorpora a las declaraciones de lex.yy.c */
+%}
+
+/* definiciones de expresiones regulares */
+delim   [ \t\n]
+espacio {delim}+
+digito  [0-9]
+numero  {digito}+
+
+%%
+
+{espacio}               ;
+{numero}                {yylval.Natributo=atoi(yytext);
+                        return(N);}
+"+"                     {return('+');}
+%%
+/* este codigo se incorpora al final de lex.yy.c
+   es necesatio en el caso de que al compilar no utilizemos la
+   directiva -ll   */
+
+yywrap()
+{
+        return 1;
+}
+
+/* ------------------------- yacc.y -------------------------*/
+
+%{
+typedef struct resto {
+                int h,s;
+                } Rhs; /*definicion del registro semantico para R */
+%}
+
+%union {
+        int Eatributo;
+        int Matributo;
+        int Tatributo;
+        int Natributo;
+        Rhs Ratributos;}
+
+%token <Natributo> N
+%type <Eatributo> E
+%type <Matributo> M1
+%type <Ratributos> R
+%type <Matributo> M2
+%type <Tatributo> T
+
+%%
+
+E       : T M1 R                {$$ = $3.s; printf("resultado %d \n", $$);}
+        ;
+M1      :/*nula*/               {$$ = $<Tatributo>0;
+                                 printf("T= %d    M1= %d \n",$<Tatributo>0, $$);}
+        ;
+R       :'+' T M2 R             {$$.s = $4.s;}
+        |/*nula*/               {$$.s = $<Matributo>0;
+                                printf("M2 final = %d    Rs = %d \n", $<Matributo>0, $$.s);}
+        ;
+M2      :/*nula*/               {$$ = $<Tatributo>0 + $<Matributo>-2;
+                                printf("resultado parcial en M2 = %d \n",$$);}
+        ;
+T       : N                     {$$ = $1;
+                                printf("numero = %d ", $1);}
+
+%%
+
+# include "lex.yy.c"
+main(){
+        return (yyparse());
+        }
+
+yyerror(char *s){
+        printf("error \n");
+        }
+
+/* ========================================================== */
+/* ejemplo lex-yacc3  segunda aproximacion */
+/* ========================================================== */
+/* -----------------------  lex.l ------------------------- */
+/* igual que el de la primera aproximacion */
+
+/* ------------------------- yacc.y -------------------------*/
+
+%{
+typedef struct {
+                int h,s;
+                } tipoR; /*definicion del registro semantico para R */
+%}
+
+ %union {
+        int  Natributo;
+        int Tatributo;
+        tipoR Ratributos;
+        }
+
+%token <Natributo> N
+%type <Tatributo> E M T
+%type <Ratributos> R
+
+
+%%
+
+E       : T  R                  {$$ = $2.s;}
+        ;
+R       :'+' T M R              {$$.s = $4.s;}
+        |/*nula*/               {$$.s = $<Tatributo>0;
+                                printf("Rh en M = %d  Rs = %d \n", $<Tatributo>0, $$.s);}
+        ;
+M       :/*nula*/               {$$ = $<Tatributo>-2 + $<Tatributo>0;
+                                printf("Rpadre = %d  Rh en M = %d \n", $<Tatributo>-2, $$);}
+        ;
+T       : N                     {$$ = $1;
+                                printf("numero = %d \n",$1);}
+
+%%
+
+# include "lex.yy.c"
+main(){
+        return (yyparse());
+        }
+
+yyerror(char *s){
+        printf("error \n");
+        }
+
+/* ========================================================== */
+/* ejemplo lex-yacc3  tercera aproximacion, la buena */
+/* ========================================================== */
+/* -----------------------  lex.l ------------------------- */
+
+%{
+/* este codigo C se incorpora a las declaraciones de lex.yy.c */
+%}
+
+/* definiciones de expresiones regulares */
+delim   [ \t\n]
+espacio {delim}+
+digito  [0-9]
+numero  {digito}+
+
+%%
+
+{espacio}               ;
+{numero}                {yylval=atoi(yytext);
+                        return(N);}
+"+"                     {return('+');}
+%%
+/* este codigo se incorpora al final de lex.yy.c
+   es necesatio en el caso de que al compilar no utilizemos la
+   directiva -ll   */
+
+yywrap()
+{
+        return 1;
+}
+
+/* ------------------------- yacc.y -------------------------*/
+
+
+%{
+%}
+
+%token  N
+
+
+%%
+
+E       : T  R                  {$$ = $2;}
+        ;
+R       :'+' T M R              {$$ = $4;}
+        |/*nula*/               {$$ = $0;
+                                printf("Rh en M = %d  Rs = %d \n", $0, $$);}
+        ;
+M       :/*nula*/               {$$ = $-2 + $0;
+                                printf("Rpadre = %d  Rh en M = %d \n", $-2, $$);}
+        ;
+T       : N                     {$$ = $1;
+                                printf("numero = %d \n",$1);}
+
+%%
+
+# include "lex.yy.c"
+main(){
+        return (yyparse());
+        }
+
+yyerror(char *s){
+        printf("error \n");
+        }
+
+/* ========================================================== */
+/* ejemplo lex-yacc4 primera aproximacion */
+/* ========================================================== */
+/* -----------------------  lex.l ------------------------- */
+
+%{
+/* este codigo C se incorpora a las declaraciones globales de lex.yy.c */
+%}
+
+/* definiciones de expresiones regulares */
+
+nulos   [ \t\n]
+espacio {nulos}+
+digito  [0-9]
+letra   [A-Za-z]
+resto   ({letra}|{digito})*
+ident   {letra}{resto}
+
+%%
+        /* declaraciones locales de yylex() */;
+
+
+int                     {strcpy(yylval.tipo, yytext);
+                        /*printf("%s %s \n", yytext, yylval.tipo);*/
+                        return(INT);}
+long                    {strcpy(yylval.tipo, yytext);
+                        /*printf("%s %s \n", yytext, yylval.tipo);*/
+                        return(LONG);}
+{ident}                 {strcpy(yylval.lexema, yytext);
+                        /*printf("%s %s \n", yytext, yylval.lexema);*/
+                        return(ID);}
+","                     {return(',');}
+";"                     {return(';');}
+":"                     {return(':');}
+{espacio}               {/*printf("espacio \n");*/}
+.                       {printf("error lexico");}
+%%
+
+/* ------------------------- yacc.y -------------------------*/
+%{
+#include <string.h>
+
+typedef struct {
+                char    tipo[10];
+                int     inc;
+                } tipoTatributos; /*definicion del registro semantico para T */
+
+typedef struct {
+                char    tipo[10];
+                int     inc, dir;
+                } tipoMatributos; /*definicion del registro semantico para M */
+
+%}
+
+%union {
+        int dir;
+        char lexema[10], tipo[10];
+        tipoTatributos Tatributos;
+        tipoMatributos Matributos;}
+
+%token <tipo> LONG INT
+%token <lexema> ID
+%type <dir> L
+%type <Tatributos> T
+%type <Matributos> M
+%start D
+
+%%
+D       : T M L                 {printf(" FIN \n");}
+        ;
+T       :INT                    {strcpy($$.tipo, $1); $$.inc=1;}
+        |LONG                   {strcpy($$.tipo, $1); $$.inc=2;}
+        ;
+M       :/*nula*/               {$$.dir = 200;
+                                $$.inc = $<Tatributos>0.inc;
+                                strcpy($$.tipo, $<Tatributos>0.tipo);}
+        ;
+L       :ID                     {$$=$<Matributos>0.dir + $<Matributos>0.inc;
+                                printf("%s %s %d \n", $1, $<Matributos>0.tipo, $<Matributos>0.dir);}
+        |L ',' ID               {$$ = $1 + $<Matributos>0.inc;
+                                printf("%s %s %d \n" , $3, $<Matributos>0.tipo, $1);}
+        |error ';' ID           {printf("error en la lista ident=%s \n", $3);
+                                $$ = 1000 + $<Matributos>0.inc;
+                                printf("%s %s %d \n", $3, $<Matributos>0.tipo, 1000);}
+        ;
+%%
+
+# include "lex.yy.c"
+
+/* ========================================================== */
+/* ejemplo lex-yacc4 segunda aproximacion, la buena */
+/* ========================================================== */
+/* -----------------------  lex.l ------------------------- */
+
+/* igual que el de la primera aproximacion */
+
+/* ------------------------- yacc.y -------------------------*/
+
+%{
+#include <string.h>
+
+typedef struct {
+                char    tipo[10];
+                int     inc;
+                } tipoTatributos; /*definicion del registro semantico para T */
+
+typedef struct {
+                char    tipo[10];
+                int     inc, dir;
+                } tipoMatributos; /*definicion del registro semantico para M */
+
+%}
+
+%union {
+        int dir;
+        char lexema[10], tipo[10];
+        tipoTatributos Tatributos;
+        tipoMatributos Matributos;}
+
+%token <tipo> LONG INT
+%token <lexema> ID
+%type <dir> L
+%type <Tatributos> T
+%type <Matributos> M
+%start D
+
+%%
+D       : T M L                 {printf(" FIN \n");}
+        ;
+T       :INT                    {strcpy($$.tipo, $1); $$.inc=1;}
+        |LONG                   {strcpy($$.tipo, $1); $$.inc=2;}
+        ;
+M       :/*nula*/               {$$.dir = 200;
+                                $$.inc = $<Tatributos>0.inc;
+                                strcpy($$.tipo, $<Tatributos>0.tipo);}
+        ;
+L       :ID                     {printf("%s %s %d \n", $1, $<Matributos>0.tipo, $<Matributos>0.dir);
+                                $$=$<Matributos>0.dir + $<Matributos>0.inc;
+                                $<Matributos>0.dir=$$;}
+        |L ',' ID               {printf("%s %s %d \n" , $3, $<Matributos>0.tipo, $1);
+                                $$ = $1 + $<Matributos>0.inc;
+                                $<Matributos>0.dir=$$;}
+        |error ';' ID           {printf("error en la lista ident=%s \n", $3);
+                                printf("%s %s %d \n", $3, $<Matributos>0.tipo, $<Matributos>0.dir);
+                                $$ = $<Matributos>0.dir + $<Matributos>0.inc;
+                                $<Matributos>0.dir=$$;}
+        ;
+%%
+
+# include "lex.yy.c"
+
+
+/* ========================================================== */
+/* ejemplo lex-yacc5  */
+/* ========================================================== */
+/* -----------------------  lex.l ------------------------- */
+
+nulos   [ \t\n]
+espacio {nulos}+
+
+%%
+
+{espacio}               ;
+[a-zA-Z]                {yylval.atributo = yytext[yyleng-1]; return(SIMBOLO);}
+"|"                     {return('|');}
+"*"                     {return('*');}
+"("                     {return('(');}
+")"                     {return(')');}
+.                       {printf("error lexico \n");}
+
+/* ------------------------- yacc.y -------------------------*/
+%{
+        typedef struct{
+                        int i, f;
+                        }tipoestados;
+%}
+
+%union{
+        char            atributo;
+        tipoestados     estados;}
+
+%token <atributo>SIMBOLO
+%type  <estados>E T F P
+
+%%
+
+E       :E '|' T                {$$.i=creaestado(); 
+                                $$.f=creaestado();
+                                printf("M[ %d, nada] = %d, %d \n", $$.i, $1.i, $3.i);
+                                printf("M[ %d, nada] = %d \n", $1.f, $$.f);
+                                printf("M[ %d, nada] = %d \n", $3.f, $$.f);}
+        | T
+        ;
+
+T       :T F                    {$$.i=$1.i; $$.f=$2.f;
+                                printf("M[ %d, nada] = %d \n", $1.f, $2.i);}
+        | F
+        ;
+
+F       :P
+        | P '*'                 {$$.i=creaestado();$$.f=creaestado();
+                                printf("M[ %d , nada] = %d, %d \n", $$.i, $1.i, $$.f);
+                                printf("M[ %d , nada] = %d, %d \n", $1.f, $1.i, $$.f);}
+        ;
+
+P       :'(' E ')'              {$$.i=$2.i; $$.f=$2.f;}
+        | SIMBOLO               {$$.i=creaestado();$$.f=creaestado();
+                                printf("M[ %d , %c ] = %d \n", $$.i, $1, $$.f);}
+        ;
+
+%%
+#include "lex.yy.c"
+
+        int estado=0;
+
+int creaestado(){
+        return ++estado;
+}
